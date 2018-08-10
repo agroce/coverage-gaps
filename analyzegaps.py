@@ -1,6 +1,10 @@
 import csv
 import datetime
 import scipy
+import scipy.stats
+
+MAX_K = 5
+MIN_DAYS = 4
 
 whichProjects = {}
 projectChanges = {}
@@ -27,14 +31,6 @@ with open('coverage_jacoco.csv', 'r') as projfile:
                 projectChanges[row[1]].append(row[2])
         allTimes[row[2]] = row[5]
 
-if False:
-    allTimes = {}
-    with open('ShaAndTime.csv', 'r') as timefile:
-        timeReader = csv.reader(timefile)
-        for row in timeReader:
-            if row[0] != 'SHA':
-                allTimes[row[0]] = row[1]
-
 missingProject = 0
 missingTime = 0
 tried = 0
@@ -42,6 +38,9 @@ rejected = 0
 
 targetProjects = {}
 allChanges = {}
+
+def days(duration):
+    return ((duration/60.0)/60.0)/24.0
 
 with open ('flapping_coveralls.csv') as flapfile:
     flapReader = csv.reader(flapfile)
@@ -100,45 +99,112 @@ for target in allChanges.keys():
     sortChanges = sorted(changes, key=lambda x:int(allTimes[x[0]]))
     allChanges[target] = sortChanges
 
-coveragePermanentlyDropped = {}
-coverageLostOnce = {}
-for target in allChanges:
-    if len(allChanges[target]) == 1:
-        if allChanges[target][0][1] == '0':
-            coveragePermanentlyDropped[target] = allChanges[target]
-    if len(allChanges[target]) == 2:    
-        if allChanges[target][0][1] == '0':
-            if allChanges[target][1][1] != '1':
-                continue
-            coverageLostOnce[target] = (allChanges[target])
+# filter out any target with a switch with duration less than MIN_DAYS in size as possibly "flaky-covered"
+newAllChanges = {}
+nondetCount = 0
 
-def days(duration):
-    return ((duration/60.0)/60.0)/24.0
+print len(allChanges), "COVERAGE TARGETS TO ANALYZE"
+
+for target in allChanges.keys():
+    if len(allChanges[target]) == 1:
+        newAllChanges[target] = allChanges[target]
+    else:
+        sequence = allChanges[target][1:]
+        lastTime = int(allTimes[allChanges[target][0][0]])
+        nondeterminism = False
+        for change in sequence:
+            newTime = int(allTimes[change[0]])
+            duration = days(newTime-lastTime)
+            if duration < MIN_DAYS:
+                nondeterminism = True
+                nondetCount += 1
+                break
+            lastTime = newTime
+        if not nondeterminism:
+            newAllChanges[target] = allChanges[target]
+
+print "FILTERED OUT", nondetCount, "COVERAGE TARGETS AS POSSIBLY NONDETERMINISTIC"
+
+allChanges = newAllChanges
+    
+coveragePermanentlyDropped = {}
+coverageLostK = {}
+for k in range(1, MAX_K):
+    coverageLostK[k] = {}
+for target in allChanges:
+    if allChanges[target][-1][1] == '0':
+        coveragePermanentlyDropped[target] = allChanges[target]
+        continue
+    for k in range(1, MAX_K):
+        pattern = []
+        for j in range(0, k):
+            pattern.extend(['0','1'])
+        if map(lambda x:x[1], allChanges[target]) != pattern:
+            continue        
+        coverageLostK[k][target] = (allChanges[target])
+
+print "COVERAGE PERMANENTLY DROPPED:", len(coveragePermanentlyDropped)
+for k in range(1, MAX_K):
+    print "COVERAGE LOST", k, "TIMES:", len(coverageLostK[k])
 
 filesWithChanges = set([])
 projectsWithChanges = set([])
-
-lostOnceSorted = sorted(coverageLostOnce.keys(), key=lambda x: int(allTimes[coverageLostOnce[x][1][0]]) - int(allTimes[coverageLostOnce[x][0][0]]))
-
+lostOnceSorted = sorted(coverageLostK[1].keys(), key=lambda x: int(allTimes[coverageLostK[1][x][1][0]]) - int(allTimes[coverageLostK[1][x][0][0]]))
 howLong = []
-for target in lostOnceSorted:
-    duration = int(allTimes[coverageLostOnce[target][1][0]]) - int(allTimes[coverageLostOnce[target][0][0]])
-    if days(duration) > 7:
-        print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
+with open("k1." + str(MIN_DAYS) + ".days.csv", 'w') as f:
+    f.write("target,project,days,commit1,commit2\n")
+    for target in lostOnceSorted:
+        duration = int(allTimes[coverageLostK[1][target][1][0]]) - int(allTimes[coverageLostK[1][target][0][0]])
+        #print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
+        f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," +
+                    coverageLostK[1][target][0][0] + "," + coverageLostK[1][target][1][0] + "\n")
         projectsWithChanges.add(targetProjects[target])
-        file = target.split(":")[0]
-        if file not in filesWithChanges:
-            filesWithChanges.add(file)
+        filesWithChanges.add(target.split(":")[0])
         howLong.append(duration)
 
-
-print len(filesWithChanges), "FILES HAVE GAPS LASTING MORE THAN 7 DAYS:"
+print len(filesWithChanges), "FILES HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS:"
 print filesWithChanges
-print len(projectsWithChanges), "PROJECTS HAVE GAPS LASTING MORE THAN 7 DAYS:"
+print len(projectsWithChanges), "PROJECTS HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS:"
 print projectsWithChanges
 
-print len(howLong), "ONE-TIME COVERAGE GAPS LASTING MORE THAN 7 DAYS"
+print len(howLong), "ONE-TIME COVERAGE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS"
 print "MINIMUM GAP:", days(min(howLong)), "DAYS"
 print "MAXIMUM GAP:", days(max(howLong)), "DAYS"
 print "MEAN GAP:", days(scipy.mean(howLong)), "DAYS"
-print "MEADIAN GAP:", days(scipy.median(howLong)), "DAYS"
+print "MEDIAN GAP:", days(scipy.median(howLong)), "DAYS"
+
+filesWithChanges = set([])
+projectsWithChanges = set([])
+lostOnceSorted = sorted(coverageLostK[2].keys(), key=lambda x: int(allTimes[coverageLostK[2][x][-1][0]]) - int(allTimes[coverageLostK[2][x][0][0]]))
+howLong = []
+howLongEach = []
+with open("k2." + str(MIN_DAYS) + ".days.csv", 'w') as f:
+    f.write("target,project,days,commit1,commit2,commit3,commit4\n")
+    for target in lostOnceSorted:
+        duration = int(allTimes[coverageLostK[2][target][-1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
+        #print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
+        f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," +
+                    coverageLostK[2][target][0][0] + "," + coverageLostK[2][target][1][0] + "," +
+                    coverageLostK[2][target][2][0] + "," + coverageLostK[2][target][3][0] +"\n")
+        projectsWithChanges.add(targetProjects[target])
+        filesWithChanges.add(target.split(":")[0])
+        howLong.append(duration)
+        duration1 = int(allTimes[coverageLostK[2][target][1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
+        duration2 = int(allTimes[coverageLostK[2][target][3][0]]) - int(allTimes[coverageLostK[2][target][2][0]])
+        howLongEach.append(duration1)
+        howLongEach.append(duration2)        
+
+print len(filesWithChanges), "FILES HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS:"
+print filesWithChanges
+print len(projectsWithChanges), "PROJECTS HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS, "DAYS:"
+print projectsWithChanges
+
+print len(howLong), "TWO-TIME COVERAGE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS"
+print "MINIMUM TOTAL PERIOD:", days(min(howLong)), "DAYS"
+print "MAXIMUM TOTAL PERIOD:", days(max(howLong)), "DAYS"
+print "MEAN TOTAL PERIOD:", days(scipy.mean(howLong)), "DAYS"
+print "MEDIAN TOTAL PERIOD:", days(scipy.median(howLong)), "DAYS"
+print "MINIMUM TOTAL GAP:", days(min(howLongEach)), "DAYS"
+print "MAXIMUM TOTAL GAP:", days(max(howLongEach)), "DAYS"
+print "MEAN TOTAL GAP:", days(scipy.mean(howLongEach)), "DAYS"
+print "MEDIAN TOTAL GAP:", days(scipy.median(howLongEach)), "DAYS"
