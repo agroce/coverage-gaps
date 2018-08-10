@@ -3,8 +3,8 @@ import datetime
 import scipy
 import scipy.stats
 
-MAX_K = 5
-MIN_DAYS = 4
+MAX_K = 100
+MIN_DAYS = 2
 
 whichProjects = {}
 projectChanges = {}
@@ -139,13 +139,14 @@ for target in allChanges:
         pattern = []
         for j in range(0, k):
             pattern.extend(['0','1'])
-        if map(lambda x:x[1], allChanges[target]) != pattern:
-            continue        
-        coverageLostK[k][target] = (allChanges[target])
+        if map(lambda x:x[1], allChanges[target]) == pattern:
+            coverageLostK[k][target] = (allChanges[target])
+            break
 
 print "COVERAGE PERMANENTLY DROPPED:", len(coveragePermanentlyDropped)
 for k in range(1, MAX_K):
-    print "COVERAGE LOST", k, "TIMES:", len(coverageLostK[k])
+    if len(coverageLostK[k]) > 0:
+        print "COVERAGE LOST", k, "TIMES:", len(coverageLostK[k])
 
 filesWithChanges = set([])
 projectsWithChanges = set([])
