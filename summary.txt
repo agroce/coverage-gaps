@@ -1,0 +1,46 @@
+Intuitively, we might expect that code coverage for a specific code target in a project is monotonically non-decreasing over time:  effort is spent adding tests and coverage, not removing tests, and once an entity (branch or statement) is covered it is, usually, covered from that time forward.  In fact, it has been shown that even when the overall coverage score for a project is increasing, coverage of individual code elements can "flip" from covered to uncovered, numerous times \cite{coverageASE}.
+
+Many such instances of flipping derive from nondeterminism ("flakiness") in tests; e.g., Gao et al. observed coverage differences of up to 184 lines of code for the same test in work on flaky testing \cite{GaoFlaky}.  In these cases, the phenomenon of code that flips coverage is simply an artifact of a general problem of test nondeterminism.  However, there are other instances of flipping, where the failure to cover a previously-covered entity persists over a longer period of time, and multiple test execution cycles.  The probability that such enduring flips are due to nondeterminism is obviously small.
+
+Some such cases may be dead, but not removed, code:  a line of code once tested is no longer tested because its functionality is now carried out by another part of the program.  Ideally, such code would be removed, but developers may not be aware of the change, or may be uncertain if the code is truly dead in all paths, and no longer needed.  Again, such instances may signify a problem with a code base, but are easy to understand and not a significant threat to testing.
+
+However, in numerous cases in real projects, a code entity that was previously covered flips to a non-covered status in tests for a significant period of time (e.g., more than a week).  However, such code is clearly not dead code, because at some point it flips again, and remains covered in future tests.  That is, there is a gap in coverage for a code entity, enduring over significant time.
+
+This project aims to examine such gaps and such questions as:
+
+\begin{enumerate}
+
+\item How frequent are such gaps?   Are they a common occurrence, with (multiple) gaps appearing in the code coverage histories of most open source projects investigate, or are they very rare?
+
+\item What causes such gaps?  Are these gaps intentional (purposefully and knowingly introduced by developers) or accidental (a byproduct of another change without any aim to change the coverage of the gapped entity)?  Furthermore, if a gap is intentional, what are the reasons developers introduce gaps?  Are gaps often intended to allow a pass result for continuous integration, in the presence of known faults whose correction is not expected until some future date?  A related question is whether gaps result from changes to test code or non-test code.  If gaps are intentional and intended to produce passing CI, then we would expect them to involve changes to test code only.
+
+\item Do gaps cause problems?  That is, does the presence of a gap often correspond to the introduction (or failure to detect) faults in a project's code?  Given that gaps result in temporally significant lack of test signal for non-dead code, we might expect that gaps do correlate to some extent with faults being introduced in the code base (because a developer introduces a fault, and the tests are unable to detect it due to not covering the gapped entity).  However, perhaps gaps are largely intentional, and relate to parts of the code that are not being actively developer for a period of time, or to entities that are known to be faulty.
+
+\item Would developers benefit from tools that notify them of coverage gaps?  Test nondeterminism is so ubiquitous it may not be useful to alert developers to all unpredictability in code coverage for entities, but gaps are rarer and reflect a more significant change in test signal.  On the other hand, at the time a gap is begun, it is impossible to predict if it is truly a gap (will the entity ever be covered again?  how long will the coverage remain flipped?) and if gaps are usually intentional this information may already be known to developers.
+
+\end{enumerate}
+
+
+@inproceedings{coverageASE,
+author = {Hilton, Michael and Bell, Jonathan and Marinov, Darko},
+title = {A Large-Scale, Longitudinal Study of Test Coverage Evolution},
+series = {ASE 2018}, year={2018},
+             booktitle={33rd IEEE/ACM International Conference on Automated Software Engineering},Note = {Acceptance rate: 20%.},
+              url = {http://jonbell.net/publications/coverage}
+
+}
+
+@inproceedings{GaoFlaky,
+ author = {Gao, Zebao and Liang, Yalan and Cohen, Myra B. and Memon, Atif M. and Wang, Zhen},
+ title = {Making System User Interactive Tests Repeatable: When and What Should We Control?},
+ booktitle = {International Conference on Software Engineering},
+ series = {ICSE '15},
+ year = {2015},
+ isbn = {978-1-4799-1934-5},
+ location = {Florence, Italy},
+ pages = {55--65},
+ numpages = {11},
+ url = {http://dl.acm.org/citation.cfm?id=2818754.2818764},
+ acmid = {2818764},
+ publisher = {IEEE},
+} 
