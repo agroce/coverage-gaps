@@ -4,7 +4,10 @@ import scipy
 import scipy.stats
 
 MAX_K = 100
-MIN_DAYS = 2
+MIN_DAYS = 7
+
+allProjects = set([])
+allFiles = set([])
 
 whichProjects = {}
 projectChanges = {}
@@ -13,6 +16,7 @@ with open('coverage.csv', 'r') as projfile:
     projReader = csv.reader(projfile)
     for row in projReader:
         if row[0] != 'repo':
+            allProjects.add(row[0])
             whichProjects[row[1]] = row[0]
             if row[0] not in projectChanges:
                 projectChanges[row[0]] = [row[1]]
@@ -24,6 +28,7 @@ with open('coverage_jacoco.csv', 'r') as projfile:
     projReader = csv.reader(projfile)
     for row in projReader:
         if row[0] != 'date':
+            allProjects.add(row[1])
             whichProjects[row[2]] = row[1]
             if row[1] not in projectChanges:
                 projectChanges[row[1]] = [row[2]]
@@ -46,6 +51,7 @@ with open ('flapping_coveralls.csv') as flapfile:
     flapReader = csv.reader(flapfile)
     for row in flapReader:
         [commit, file, line, covered] = row
+        allFiles.add(file)
         target = file + ":" + line
         commitOk = True
         tried += 1
@@ -70,6 +76,7 @@ with open ('flapping_jacoco.csv') as flapfile:
     flapReader = csv.reader(flapfile)
     for row in flapReader:
         [commit, file, line, covered] = row
+        allFiles.add(file)
         target = file + ":" + line
         commitOk = True
         tried += 1
@@ -103,6 +110,8 @@ for target in allChanges.keys():
 newAllChanges = {}
 nondetCount = 0
 
+print len(allProjects), "TOTAL PROJECTS"
+print len(allFiles), "TOTAL FILES"
 print len(allChanges), "COVERAGE TARGETS TO ANALYZE"
 
 for target in allChanges.keys():
@@ -142,6 +151,13 @@ for target in allChanges:
         if map(lambda x:x[1], allChanges[target]) == pattern:
             coverageLostK[k][target] = (allChanges[target])
             break
+        pattern = [1]
+        for j in range(0, k):
+            pattern.extend(['0','1'])
+        if map(lambda x:x[1], allChanges[target]) == pattern:
+            coverageLostK[k][target] = (allChanges[target])
+            break        
+        
 
 print "COVERAGE PERMANENTLY DROPPED:", len(coveragePermanentlyDropped)
 for k in range(1, MAX_K):
@@ -152,7 +168,7 @@ filesWithChanges = set([])
 projectsWithChanges = set([])
 lostOnceSorted = sorted(coverageLostK[1].keys(), key=lambda x: int(allTimes[coverageLostK[1][x][1][0]]) - int(allTimes[coverageLostK[1][x][0][0]]))
 howLong = []
-with open("k1." + str(MIN_DAYS) + ".days.csv", 'w') as f:
+with open("k1." + str(MIN_DAYS) + ".days.1ok.csv", 'w') as f:
     f.write("target,project,days,commit1,commit2\n")
     for target in lostOnceSorted:
         duration = int(allTimes[coverageLostK[1][target][1][0]]) - int(allTimes[coverageLostK[1][target][0][0]])
@@ -174,38 +190,40 @@ print "MAXIMUM GAP:", days(max(howLong)), "DAYS"
 print "MEAN GAP:", days(scipy.mean(howLong)), "DAYS"
 print "MEDIAN GAP:", days(scipy.median(howLong)), "DAYS"
 
-filesWithChanges = set([])
-projectsWithChanges = set([])
-lostOnceSorted = sorted(coverageLostK[2].keys(), key=lambda x: int(allTimes[coverageLostK[2][x][-1][0]]) - int(allTimes[coverageLostK[2][x][0][0]]))
-howLong = []
-howLongEach = []
-with open("k2." + str(MIN_DAYS) + ".days.csv", 'w') as f:
-    f.write("target,project,days,commit1,commit2,commit3,commit4\n")
-    for target in lostOnceSorted:
-        duration = int(allTimes[coverageLostK[2][target][-1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
-        #print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
-        f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," +
-                    coverageLostK[2][target][0][0] + "," + coverageLostK[2][target][1][0] + "," +
-                    coverageLostK[2][target][2][0] + "," + coverageLostK[2][target][3][0] +"\n")
-        projectsWithChanges.add(targetProjects[target])
-        filesWithChanges.add(target.split(":")[0])
-        howLong.append(duration)
-        duration1 = int(allTimes[coverageLostK[2][target][1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
-        duration2 = int(allTimes[coverageLostK[2][target][3][0]]) - int(allTimes[coverageLostK[2][target][2][0]])
-        howLongEach.append(duration1)
-        howLongEach.append(duration2)        
+if len(coverageLostK[2]) > 0:
 
-print len(filesWithChanges), "FILES HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS:"
-print filesWithChanges
-print len(projectsWithChanges), "PROJECTS HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS, "DAYS:"
-print projectsWithChanges
+    filesWithChanges = set([])
+    projectsWithChanges = set([])
+    lostOnceSorted = sorted(coverageLostK[2].keys(), key=lambda x: int(allTimes[coverageLostK[2][x][-1][0]]) - int(allTimes[coverageLostK[2][x][0][0]]))
+    howLong = []
+    howLongEach = []
+    with open("k2." + str(MIN_DAYS) + ".days.1ok.csv", 'w') as f:
+        f.write("target,project,days,commit1,commit2,commit3,commit4\n")
+        for target in lostOnceSorted:
+            duration = int(allTimes[coverageLostK[2][target][-1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
+            #print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
+            f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," +
+                        coverageLostK[2][target][0][0] + "," + coverageLostK[2][target][1][0] + "," +
+                        coverageLostK[2][target][2][0] + "," + coverageLostK[2][target][3][0] +"\n")
+            projectsWithChanges.add(targetProjects[target])
+            filesWithChanges.add(target.split(":")[0])
+            howLong.append(duration)
+            duration1 = int(allTimes[coverageLostK[2][target][1][0]]) - int(allTimes[coverageLostK[2][target][0][0]])
+            duration2 = int(allTimes[coverageLostK[2][target][3][0]]) - int(allTimes[coverageLostK[2][target][2][0]])
+            howLongEach.append(duration1)
+            howLongEach.append(duration2)        
 
-print len(howLong), "TWO-TIME COVERAGE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS"
-print "MINIMUM TOTAL PERIOD:", days(min(howLong)), "DAYS"
-print "MAXIMUM TOTAL PERIOD:", days(max(howLong)), "DAYS"
-print "MEAN TOTAL PERIOD:", days(scipy.mean(howLong)), "DAYS"
-print "MEDIAN TOTAL PERIOD:", days(scipy.median(howLong)), "DAYS"
-print "MINIMUM TOTAL GAP:", days(min(howLongEach)), "DAYS"
-print "MAXIMUM TOTAL GAP:", days(max(howLongEach)), "DAYS"
-print "MEAN TOTAL GAP:", days(scipy.mean(howLongEach)), "DAYS"
-print "MEDIAN TOTAL GAP:", days(scipy.median(howLongEach)), "DAYS"
+    print len(filesWithChanges), "FILES HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS:"
+    print filesWithChanges
+    print len(projectsWithChanges), "PROJECTS HAVE TWO GAPS LASTING MORE THAN", MIN_DAYS, "DAYS:"
+    print projectsWithChanges
+
+    print len(howLong), "TWO-TIME COVERAGE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS"
+    print "MINIMUM TOTAL PERIOD:", days(min(howLong)), "DAYS"
+    print "MAXIMUM TOTAL PERIOD:", days(max(howLong)), "DAYS"
+    print "MEAN TOTAL PERIOD:", days(scipy.mean(howLong)), "DAYS"
+    print "MEDIAN TOTAL PERIOD:", days(scipy.median(howLong)), "DAYS"
+    print "MINIMUM GAP:", days(min(howLongEach)), "DAYS"
+    print "MAXIMUM GAP:", days(max(howLongEach)), "DAYS"
+    print "MEAN GAP:", days(scipy.mean(howLongEach)), "DAYS"
+    print "MEDIAN GAP:", days(scipy.median(howLongEach)), "DAYS"
