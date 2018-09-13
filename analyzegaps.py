@@ -4,11 +4,13 @@ import scipy
 import scipy.stats
 
 MAX_K = 100
-MIN_DAYS = 7
+MIN_DAYS = 0
+MIN_COMMITS = 8
 
 allProjects = set([])
 allFiles = set([])
 
+commitNumbers = {}
 whichProjects = {}
 projectChanges = {}
 allTimes = {}
@@ -36,6 +38,13 @@ with open('coverage_jacoco.csv', 'r') as projfile:
                 projectChanges[row[1]].append(row[2])
         allTimes[row[2]] = row[5]
 
+for p in projectChanges:
+    psorted = sorted(projectChanges[p], key=lambda x:allTimes[x])
+    index = 0
+    for c in psorted:
+        commitNumbers[c] = index
+        index += 1
+        
 missingProject = 0
 missingTime = 0
 tried = 0
@@ -120,15 +129,22 @@ for target in allChanges.keys():
     else:
         sequence = allChanges[target][1:]
         lastTime = int(allTimes[allChanges[target][0][0]])
+        lastCommit = commitNumbers[allChanges[target][0][0]]
         nondeterminism = False
         for change in sequence:
             newTime = int(allTimes[change[0]])
+            newCommit = commitNumbers[change[0]]
             duration = days(newTime-lastTime)
             if duration < MIN_DAYS:
                 nondeterminism = True
                 nondetCount += 1
                 break
+            if (newCommit-lastCommit) < MIN_COMMITS:
+                nondeterminism = True
+                nondetCount += 1
+                break
             lastTime = newTime
+            lastCommit = newCommit
         if not nondeterminism:
             newAllChanges[target] = allChanges[target]
 
@@ -168,20 +184,23 @@ filesWithChanges = set([])
 projectsWithChanges = set([])
 lostOnceSorted = sorted(coverageLostK[1].keys(), key=lambda x: int(allTimes[coverageLostK[1][x][1][0]]) - int(allTimes[coverageLostK[1][x][0][0]]))
 howLong = []
-with open("k1." + str(MIN_DAYS) + ".days.1ok.csv", 'w') as f:
-    f.write("target,project,days,commit1,commit2\n")
+howLongC = []
+with open("k1." + str(MIN_COMMITS) + "." + str(MIN_DAYS) + ".days.1ok.csv", 'w') as f:
+    f.write("target,project,days,#commits,commit1,commit2\n")
     for target in lostOnceSorted:
         duration = int(allTimes[coverageLostK[1][target][1][0]]) - int(allTimes[coverageLostK[1][target][0][0]])
+        ncommits = commitNumbers[coverageLostK[1][target][1][0]] - commitNumbers[coverageLostK[1][target][0][0]]
         #print target, "GAP DAYS:", days(duration), "PROJECT:", targetProjects[target], "FROM", coverageLostOnce[target][0][0], "TO", coverageLostOnce[target][1][0]
-        f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," +
+        f.write(target + "," + targetProjects[target] + "," + str(days(duration)) + "," + str(ncommits) + "," +
                     coverageLostK[1][target][0][0] + "," + coverageLostK[1][target][1][0] + "\n")
         projectsWithChanges.add(targetProjects[target])
         filesWithChanges.add(target.split(":")[0])
         howLong.append(duration)
+        howLongC.append(ncommits)
 
-print len(filesWithChanges), "FILES HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS:"
+print len(filesWithChanges), "FILES HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS ,"DAYS AND", MIN_COMMITS, "COMMITS:"
 print filesWithChanges
-print len(projectsWithChanges), "PROJECTS HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS:"
+print len(projectsWithChanges), "PROJECTS HAVE SINGLE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS AND", MIN_COMMITS, "COMMITS:"
 print projectsWithChanges
 
 print len(howLong), "ONE-TIME COVERAGE GAPS LASTING MORE THAN", MIN_DAYS, "DAYS"
@@ -190,7 +209,13 @@ print "MAXIMUM GAP:", days(max(howLong)), "DAYS"
 print "MEAN GAP:", days(scipy.mean(howLong)), "DAYS"
 print "MEDIAN GAP:", days(scipy.median(howLong)), "DAYS"
 
-if len(coverageLostK[2]) > 0:
+print len(howLongC), "ONE-TIME COVERAGE GAPS LASTING MORE THAN", MIN_COMMITS, "COMMITS"
+print "MINIMUM GAP:", min(howLongC), "COMMITS"
+print "MAXIMUM GAP:", max(howLongC), "COMMITS"
+print "MEAN GAP:", scipy.mean(howLongC), "COMMITS"
+print "MEDIAN GAP:", scipy.median(howLongC), "COMMITS"
+
+if False and len(coverageLostK[2]) > 0:
 
     filesWithChanges = set([])
     projectsWithChanges = set([])
